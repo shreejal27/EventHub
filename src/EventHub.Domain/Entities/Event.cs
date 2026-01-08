@@ -86,7 +86,6 @@ public class Event
     }
     public void Cancel()
     {
-        // Business rule: Only Active events can be cancelled
         if (Status != EventStatus.Active)
             throw new DomainException($"Cannot cancel event with status {Status}");
 
@@ -95,7 +94,6 @@ public class Event
     }
     public void MarkAsCompleted()
     {
-        // Business rule: Only Active events can be completed
         if (Status != EventStatus.Active)
             throw new DomainException($"Cannot complete event with status {Status}");
 
