@@ -9,6 +9,8 @@
   <ItemGroup>
     <ProjectReference Include="..\EventHub.Application\EventHub.Application.csproj" />
     <ProjectReference Include="..\EventHub.Domain\EventHub.Domain.csproj" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.17" />
+    <PackageReference Include="Hangfire.Storage.SQLite" Version="0.4.2" />
 	<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.11" />
 	<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
 		  <PrivateAssets>all</PrivateAssets>
