@@ -17,6 +17,14 @@
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 	 </PackageReference>
 	 <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
+	 <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+	 <PackageReference Include="Polly" Version="8.4.2" />
+	 <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Scrapers\Base\" />
+    <Folder Include="Scrapers\Eventbrite\" />
   </ItemGroup>
 
 </Project>
