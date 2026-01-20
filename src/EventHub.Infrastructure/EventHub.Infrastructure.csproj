@@ -23,7 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Scrapers\Base\" />
     <Folder Include="Scrapers\Eventbrite\" />
   </ItemGroup>
 
