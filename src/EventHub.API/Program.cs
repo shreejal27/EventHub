@@ -82,6 +82,19 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = Array.Empty<Hangfire.Dashboard.IDashboardAuthorizationFilter>()
+});
+
+// Schedule recurring job to scrape all sources every hour
+RecurringJob.AddOrUpdate<ScraperService>(
+    "scrape-all-events",
+    service => service.ScrapeAllSourcesAsync(),
+    Cron.Hourly  // Run every hour at minute 0
+    //Cron.Minutely
+);
+
 // Map controller routes
 app.MapControllers();
 
