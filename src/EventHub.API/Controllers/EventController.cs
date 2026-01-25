@@ -2,6 +2,8 @@
 using EventHub.Domain.Enums;
 using EventHub.Domain.Interfaces;
 using EventHub.Domain.ValueObjects;
+using EventHub.Infrastructure.Services;
+using Hangfire;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventHub.API.Controllers;
@@ -36,15 +38,15 @@ public class EventsController : ControllerBase
     {
         _logger.LogInformation("Getting event with ID: {EventId}", id);
 
-        var @event = await _repository.GetByIdAsync(id);
+        var eventEntity = await _repository.GetByIdAsync(id);
 
-        if (@event == null)
+        if (eventEntity == null)
         {
             _logger.LogWarning("Event with ID {EventId} not found", id);
             return NotFound(new { message = $"Event with ID {id} not found" });
         }
 
-        return Ok(@event);
+        return Ok(eventEntity);
     }
 
 
@@ -106,6 +108,7 @@ public class EventsController : ControllerBase
                 request.SourceUrl
             );
 
+            // Activate the event (make it visible)
             @event.Activate();
 
             // Save to database
@@ -158,7 +161,7 @@ public class EventsController : ControllerBase
         }
     }
 
-
+ 
     [HttpPut("{id}/cancel")]
     public async Task<ActionResult<Event>> CancelEvent(int id)
     {
@@ -203,7 +206,7 @@ public class EventsController : ControllerBase
 
         _logger.LogInformation("Event {EventId} deleted successfully", id);
 
-        return NoContent();
+        return NoContent(); // 204 - successful deletion
     }
 
     [HttpGet("health")]
@@ -215,6 +218,33 @@ public class EventsController : ControllerBase
             timestamp = DateTime.UtcNow,
             message = "EventHub API is running!"
         });
+    }
+
+    [HttpPost("scrape")]
+    public ActionResult TriggerScraping()
+    {
+        _logger.LogInformation("Manual scraping triggered via API");
+
+        // Queue background job
+        var jobId = BackgroundJob.Enqueue<ScraperService>(
+            service => service.ScrapeAllSourcesAsync()
+        );
+
+        return Accepted(new
+        {
+            message = "Scraping job queued",
+            jobId = jobId,
+            dashboardUrl = "/hangfire",
+            note = "Check Hangfire dashboard to monitor progress"
+        });
+    }
+
+    [HttpGet("scraper-stats")]
+    public async Task<ActionResult<ScraperStatistics>> GetScraperStatistics(
+        [FromServices] ScraperService scraperService)
+    {
+        var stats = await scraperService.GetStatisticsAsync();
+        return Ok(stats);
     }
 }
 
