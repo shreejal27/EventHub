@@ -246,6 +246,19 @@ public class EventsController : ControllerBase
         var stats = await scraperService.GetStatisticsAsync();
         return Ok(stats);
     }
+
+    [HttpGet("all-including-draft")]
+    public async Task<ActionResult<List<Event>>> GetAllIncludingDraft()
+    {
+        var events = await _repository.GetAllAsync();
+        return Ok(new
+        {
+            totalCount = events.Count,
+            byStatus = events.GroupBy(e => e.Status)
+                            .Select(g => new { status = g.Key, count = g.Count() }),
+            events = events
+        });
+    }
 }
 
 public record CreateEventRequest(
