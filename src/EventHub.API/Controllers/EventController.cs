@@ -259,6 +259,48 @@ public class EventsController : ControllerBase
             events = events
         });
     }
+
+    [HttpGet("test-scraper")]
+    public async Task<ActionResult> TestScraper(
+    [FromServices] ScraperService scraperService,
+    [FromServices] IEnumerable<IEventScraper> scrapers)
+    {
+        var scrapersList = scrapers.ToList();
+
+        var result = new
+        {
+            scrapersRegistered = scrapersList.Count,
+            scraperNames = scrapersList.Select(s => s.SourceName).ToList(),
+            message = "Triggering scraper service..."
+        };
+
+        _logger.LogInformation("Testing scraper with {Count} scrapers", scrapersList.Count);
+
+        try
+        {
+            await scraperService.ScrapeAllSourcesAsync();
+
+            var eventsAfter = await _repository.GetAllAsync();
+
+            return Ok(new
+            {
+                result,
+                success = true,
+                eventsCount = eventsAfter.Count,
+                message = "Scraper ran successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new
+            {
+                result,
+                success = false,
+                error = ex.Message,
+                stackTrace = ex.StackTrace
+            });
+        }
+    }
 }
 
 public record CreateEventRequest(
