@@ -62,8 +62,22 @@ builder.Services.AddSingleton(new EventbriteScraperOptions
     DefaultLongitude = 85.3240
 });
 
-// Register Eventbrite scraper
-builder.Services.AddScoped<IEventScraper, EventbriteScraper>();
+builder.Services.AddHttpClient<EventbriteScraper>(client =>
+{
+    client.BaseAddress = new Uri("https://www.eventbriteapi.com/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+// Register Eventbrite scraper as IEventScraper
+builder.Services.AddScoped<IEventScraper>(provider =>
+{
+    var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
+    var httpClient = httpClientFactory.CreateClient(nameof(EventbriteScraper));
+    var logger = provider.GetRequiredService<ILogger<EventbriteScraper>>();
+    var options = provider.GetRequiredService<EventbriteScraperOptions>();
+
+    return new EventbriteScraper(logger, httpClient, options);
+});
 
 // Register scraper service
 builder.Services.AddScoped<ScraperService>();
