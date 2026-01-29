@@ -2,6 +2,7 @@
 using EventHub.Domain.Enums;
 using EventHub.Domain.Interfaces;
 using EventHub.Domain.ValueObjects;
+using EventHub.Infrastructure.Scrapers.Eventbrite;
 using EventHub.Infrastructure.Services;
 using Hangfire;
 using Microsoft.AspNetCore.Mvc;
@@ -295,6 +296,68 @@ public class EventsController : ControllerBase
             return Ok(new
             {
                 result,
+                success = false,
+                error = ex.Message,
+                stackTrace = ex.StackTrace
+            });
+        }
+    }
+
+    [HttpGet("test-eventbrite-direct")]
+    public async Task<ActionResult> TestEventbriteDirect()
+    {
+        try
+        {
+            // Create scraper manually to test
+            HttpClient httpClient = new HttpClient();
+            var options = new EventbriteScraperOptions
+            {
+                DefaultCity = "Kathmandu",
+                DefaultCountry = "Nepal",
+                DefaultLatitude = 27.7172,
+                DefaultLongitude = 85.3240
+            };
+
+            ILoggerFactory loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            var logger = loggerFactory.CreateLogger<EventbriteScraper>();
+
+            var scraper = new EventbriteScraper(logger, httpClient, options);
+
+            _logger.LogInformation("Testing Eventbrite scraper directly...");
+
+            var events = await scraper.ScrapeAsync();
+
+            _logger.LogInformation("Scraper returned {Count} events", events.Count);
+
+            if (events.Any())
+            {
+                // Activate and save
+                foreach (var e in events)
+                {
+                    e.Activate();
+                }
+
+                await _repository.AddRangeAsync(events);
+
+                return Ok(new
+                {
+                    success = true,
+                    eventsScraped = events.Count,
+                    events = events
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                eventsScraped = 0,
+                message = "No events returned from scraper"
+            });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new
+            {
                 success = false,
                 error = ex.Message,
                 stackTrace = ex.StackTrace
