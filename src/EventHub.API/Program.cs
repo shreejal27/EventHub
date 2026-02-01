@@ -1,4 +1,5 @@
 using EventHub.Domain.Interfaces;
+using EventHub.Infrastructure.BackgroundJobs;
 using EventHub.Infrastructure.Persistence;
 using EventHub.Infrastructure.Persistence.Repositories;
 using EventHub.Infrastructure.Scrapers.Eventbrite;
@@ -54,7 +55,7 @@ builder.Services.AddHttpClient();
 // Register scraper options
 builder.Services.AddSingleton(new EventbriteScraperOptions
 {
-    ApiKey = "", // Would come from configuration in production
+    ApiKey = "", 
     Location = "Kathmandu, Nepal",
     DefaultCity = "Kathmandu",
     DefaultCountry = "Nepal",
@@ -62,25 +63,20 @@ builder.Services.AddSingleton(new EventbriteScraperOptions
     DefaultLongitude = 85.3240
 });
 
+// Register Eventbrite scraper
+builder.Services.AddScoped<IEventScraper, EventbriteScraper>();
+
+// Register scraper service
+builder.Services.AddScoped<ScraperService>();
+
+// Register background job wrapper
+builder.Services.AddScoped<ScrapingBackgroundJob>();
+
 builder.Services.AddHttpClient<EventbriteScraper>(client =>
 {
     client.BaseAddress = new Uri("https://www.eventbriteapi.com/");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-
-// Register Eventbrite scraper as IEventScraper
-builder.Services.AddScoped<IEventScraper>(provider =>
-{
-    var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
-    var httpClient = httpClientFactory.CreateClient(nameof(EventbriteScraper));
-    var logger = provider.GetRequiredService<ILogger<EventbriteScraper>>();
-    var options = provider.GetRequiredService<EventbriteScraperOptions>();
-
-    return new EventbriteScraper(logger, httpClient, options);
-});
-
-// Register scraper service
-builder.Services.AddScoped<ScraperService>();
 
 // Add more scrapers here as you build them:
 // builder.Services.AddScoped<IEventScraper, MeetupScraper>();
@@ -102,9 +98,9 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 });
 
 // Schedule recurring job to scrape all sources every hour
-RecurringJob.AddOrUpdate<ScraperService>(
+RecurringJob.AddOrUpdate<ScrapingBackgroundJob>(
     "scrape-all-events",
-    service => service.ScrapeAllSourcesAsync(),
+    job => job.ExecuteAsync(),
     Cron.Hourly  // Run every hour at minute 0
     //Cron.Minutely
 );
