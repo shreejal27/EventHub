@@ -1,4 +1,5 @@
-﻿using EventHub.Domain.Interfaces;
+﻿using EventHub.Domain.Entities;
+using EventHub.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace EventHub.Infrastructure.Services;
@@ -6,15 +7,18 @@ public class ScraperService
 {
     private readonly IEnumerable<IEventScraper> _scrapers;
     private readonly IEventRepository _repository;
+    private readonly IDeduplicationService _deduplicationService;
     private readonly ILogger<ScraperService> _logger;
 
     public ScraperService(
         IEnumerable<IEventScraper> scrapers,
         IEventRepository repository,
+        IDeduplicationService deduplicationService,
         ILogger<ScraperService> logger)
     {
         _scrapers = scrapers ?? throw new ArgumentNullException(nameof(scrapers));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _deduplicationService = deduplicationService ?? throw new ArgumentNullException(nameof(deduplicationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -79,16 +83,55 @@ public class ScraperService
                         }
                     }
 
-                    // Save to database
-                    await _repository.AddRangeAsync(events);
+                    // 🆕 DEDUPLICATION - Process events to find duplicates
+                    var deduplicationResult = await _deduplicationService.ProcessEventsAsync(events);
+
+                    // Save new events only
+                    if (deduplicationResult.NewEvents.Any())
+                    {
+                        await _repository.AddRangeAsync(deduplicationResult.NewEvents);
+                        _logger.LogInformation(
+                            "Added {Count} new events from {Source}",
+                            deduplicationResult.NewEvents.Count,
+                            scraper.SourceName
+                        );
+                    }
+
+                    // Update existing events with better data
+                    foreach (var pair in deduplicationResult.ExistingEvents)
+                    {
+                        MergeEventData(pair.ExistingEvent, pair.ScrapedEvent);
+                        await _repository.UpdateAsync(pair.ExistingEvent);
+                    }
+
+                    if (deduplicationResult.ExistingEvents.Any())
+                    {
+                        _logger.LogInformation(
+                            "Updated {Count} existing events from {Source}",
+                            deduplicationResult.ExistingEvents.Count,
+                            scraper.SourceName
+                        );
+                    }
+
+                    if (deduplicationResult.SkippedEvents.Any())
+                    {
+                        _logger.LogInformation(
+                            "Skipped {Count} duplicate events from {Source}",
+                            deduplicationResult.SkippedEvents.Count,
+                            scraper.SourceName
+                        );
+                    }
 
                     totalEventsScraped += events.Count;
-                    totalEventsSaved += events.Count;
+                    totalEventsSaved += deduplicationResult.NewEvents.Count;
 
                     _logger.LogInformation(
-                        "Successfully scraped and saved {Count} events from {Source}",
+                        "Processed {Source}: {Total} scraped, {New} new, {Updated} updated, {Skipped} skipped",
+                        scraper.SourceName,
                         events.Count,
-                        scraper.SourceName
+                        deduplicationResult.NewEvents.Count,
+                        deduplicationResult.ExistingEvents.Count,
+                        deduplicationResult.SkippedEvents.Count
                     );
 
                     successfulScrapers++;
@@ -214,6 +257,35 @@ public class ScraperService
         }
 
         return stats;
+    }
+
+    private void MergeEventData(Event existing, Event scraped)
+    {
+        // Update description if scraped version is longer/better
+        if (scraped.Description.Length > existing.Description.Length)
+        {
+            existing.UpdateDescription(scraped.Description);
+        }
+
+        // Update title if it's more detailed
+        if (scraped.Title.Length > existing.Title.Length &&
+            !scraped.Title.Equals(existing.Title, StringComparison.OrdinalIgnoreCase))
+        {
+            existing.UpdateTitle(scraped.Title);
+        }
+
+        // Update dates if scraped version is more precise
+        if (scraped.StartDate.TimeOfDay != TimeSpan.Zero &&
+            existing.StartDate.TimeOfDay == TimeSpan.Zero)
+        {
+            existing.Reschedule(scraped.StartDate, scraped.EndDate);
+        }
+
+        _logger.LogDebug(
+            "Merged data for event '{Title}' (ID: {Id})",
+            existing.Title,
+            existing.Id
+        );
     }
 }
 
