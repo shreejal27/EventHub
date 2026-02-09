@@ -302,4 +302,3 @@ public class ScraperInfo
     public string Name { get; set; } = string.Empty;
     public bool IsHealthy { get; set; }
 }
-
